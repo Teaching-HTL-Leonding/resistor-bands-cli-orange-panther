@@ -1,37 +1,76 @@
 ﻿Console.OutputEncoding = System.Text.Encoding.Default;
-if (args.Length < 1)
+#region checking argument
+if (args.Length != 1)
 {
-    Console.WriteLine("Missing arguments. Try again :)");
+    Console.WriteLine("Wrong number of argument!. Try again :)");
+    return;
+}
+if (!(args[0].Length == 15 || args[0].Length == 19))
+{
+    Console.WriteLine("Invalid length of arguments! Try again :)");
     return;
 }
 
-double resistorValue = 0, Tolerance = 0;
+if (args[0].Length == 15)
+{
+    if (args[0][3] != '-' || args[0][7] != '-' || args[0][11] != '-')
+    {
+        Console.WriteLine("Invalid input format! Please use hyphen '-' to separate colors. Try again :)");
+        return;
+    }
+}
+else 
+{
+    if (args[0][3] != '-' || args[0][7] != '-' || args[0][11] != '-' || args[0][15] != '-')
+    {
+        Console.WriteLine("Missing hyphen! Try again :)");
+        return;
+    }
+}
+#endregion
+const string INVALID_COLOR_CODE = "Invalid color code! Try again :)";
 
-GetColors(out string col1, out string col2, out string col3, out string col4, out string colTol);
 if (args[0].Length < 16)
 {
-    Decode4ColorBands(col1, col2, col3, colTol, out resistorValue, out Tolerance);
+    if (TryDecode4ColorBands(
+        args[0].Substring(0, 3),
+        args[0].Substring(4, 3),
+        args[0].Substring(8, 3),
+        args[0].Substring(12, 3),
+        out double resistorValue,
+        out double tolerance
+    ))
+    {
+        Console.WriteLine($"The resistor value is {resistorValue:n}Ω and the Tolerance is ± {tolerance}%");
+    }
+    else
+    {
+        Console.WriteLine(INVALID_COLOR_CODE);
+    }
 }
 else
 {
-    Decode5ColorBands(col1, col2, col3, col4, colTol, out resistorValue, out Tolerance);
-}
-Console.WriteLine($"The resistor value is {resistorValue:n}Ω and the Tolerance is ± {Tolerance}%");
-
-void GetColors(out string col1, out string col2, out string col3, out string col4, out string colTol)
-{
-    string colorBands = args[0];
-    col1 = colorBands.Substring(0, 3);
-    col2 = colorBands.Substring(4, 3);
-    col3 = colorBands.Substring(8, 3);
-    col4 = colorBands.Substring(12, 3);
-    colTol = colorBands.Substring(colorBands.Length - 3);
-}
-
-int ConvertColorToDigit(string color)
-{
-    return color switch
+    if(TryDecode5ColorBands(
+        args[0].Substring(0, 3),
+        args[0].Substring(4, 3),
+        args[0].Substring(8, 3),
+        args[0].Substring(12, 3),
+        args[0].Substring(16, 3),
+        out double resistorValue,
+        out double tolerance
+    ))
     {
+         Console.WriteLine($"The resistor value is {resistorValue:n}Ω and the Tolerance is ± {tolerance}%");
+    }
+    else
+    {
+        Console.WriteLine(INVALID_COLOR_CODE);
+    }
+}
+
+bool TryConvertColorToDigit(string color, out int colorDigit)
+{
+    colorDigit = color switch{
         "Bla" => 0,
         "Bro" => 1,
         "Red" => 2,
@@ -40,36 +79,39 @@ int ConvertColorToDigit(string color)
         "Gre" => 5,
         "Blu" => 6,
         "Vio" => 7,
-        "Gra" => 8,
+        "Gra" => 5,
         "Whi" => 9,
         _ => -1
     };
+    if (colorDigit == -1)
+    {
+        return false;
+    }
+    return true;
 }
 
-double GetMultiplierFromColor(string color)
+bool TryGetMultiplierFromColor(string color, out double multiplier)
 {
-    return color switch
+    switch (color)
     {
-        "Bla" => 1,
-        "Bro" => 10,
-        "Red" => 100,
-        "Ora" => 1_000,
-        "Yel" => 10_000,
-        "Gre" => 100_000,
-        "Blu" => 1_000_000,
-        "Vio" => 10_000_000,
-        "Gra" => 100_000_000,
-        "Whi" => 1_000_000_000,
-        "Gol" => 0.1,
-        "Sil" => 0.01,
-        _ => -1
-    };
+        case "Gol": multiplier = 0.1; break;
+        case "Sil": multiplier = 0.01; break;
+        default: 
+        int digit;
+        if (!TryConvertColorToDigit(color, out digit))
+        {
+            multiplier = -1;
+            return false;
+        }
+        multiplier = Math.Pow(10, digit);
+        break;
+    }
+    return true;
 }
 
-double GetToleranceFromColor(string color)
+bool TryGetToleranceFromColor(string color, out double tolerance)
 {
-    return color switch
-    {
+    tolerance = color switch{
         "Bro" => 1,
         "Red" => 2,
         "Gre" => 0.5,
@@ -80,27 +122,40 @@ double GetToleranceFromColor(string color)
         "Sil" => 10,
         _ => -1
     };
+    
+    if (tolerance == -1)
+    {
+        return false;
+    }
+    return true;
 }
 
-void Decode4ColorBands(string col1, string col2, string col3, string colTol, out double resistorValue, out double Tolerance)
+bool TryDecode4ColorBands(string col1, string col2, string col3, string colTol,
+    out double resistorValue, out double tolerance)
 {
-    int valCol1 = ConvertColorToDigit(col1);
-    int valCol2 = ConvertColorToDigit(col2);
-    double valCol3 = GetMultiplierFromColor(col3);
-    Tolerance = GetToleranceFromColor(colTol);
+    tolerance = -1; resistorValue = -1;
 
-    double factor1 = double.Parse(valCol1.ToString() + valCol2.ToString());
-    resistorValue = factor1 * valCol3;
+    if (!TryConvertColorToDigit(col1, out int digit1)) { return false; }
+    if (!TryConvertColorToDigit(col2, out int digit2)) { return false; }
+    if (!TryGetMultiplierFromColor(col3, out double multiplier)) { return false; }
+    if (!TryGetToleranceFromColor(colTol, out tolerance)) { return false; }
+
+    resistorValue = (digit1 * 10 + digit2) * multiplier;
+    return true;
 }
 
-void Decode5ColorBands(string col1, string col2, string col3, string col4, string colTol, out double resistorValue, out double Tolerance)
+bool TryDecode5ColorBands(string col1, string col2, string col3, string col4, string colTol, 
+    out double resistorValue, out double tolerance)
 {
-    int valCol1 = ConvertColorToDigit(col1);
-    int valCol2 = ConvertColorToDigit(col2);
-    int valCol3 = ConvertColorToDigit(col3);
-    double valCol4 = GetMultiplierFromColor(col4);
-    Tolerance = GetToleranceFromColor(colTol);
+    tolerance = -1; resistorValue = -1;
 
-    double factor1 = double.Parse(valCol1.ToString() + valCol2.ToString() + valCol3.ToString());
-    resistorValue = factor1 * valCol4;
+    if (!TryConvertColorToDigit(col1, out int digit1)) { return false; }
+    if (!TryConvertColorToDigit(col2, out int digit2)) { return false; }
+    if (!TryConvertColorToDigit(col3, out int digit3)) { return false; }
+    if (!TryGetMultiplierFromColor(col4, out double multiplier)) { return false; }
+    if (!TryGetToleranceFromColor(colTol, out tolerance)) { return false; }
+
+    resistorValue = (digit1 * 100 + digit2 * 10 + digit3) * multiplier;
+    return true;
+
 }
